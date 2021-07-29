@@ -1,0 +1,158 @@
+SET SERVEROUTPUT ON;
+--프로시저 연습문제1
+CREATE TABLE PROCTEST(
+    PROC_SEQ NUMBER,
+    PROC_CONTENT VARCHAR2(100),
+    CONSTRAINT PK_PROCTEST PRIMARY KEY(PROC_SEQ)
+);
+
+CREATE SEQUENCE SEQPROC1
+START WITH 1
+INCREMENT BY 1;
+
+--1-1)프로시저 PROC_TEST1생성
+
+CREATE OR REPLACE PROCEDURE PROC_TEST1
+IS
+BEGIN
+    INSERT INTO PROCTEST(PROC_SEQ,PROC_CONTENT)
+    VALUES(SEQPROC1.NEXTVAL,'개똥이');
+    
+    EXCEPTION
+        WHEN OTHERS THEN
+            DBMS_OUTPUT.PUT_LINE('예외 발생 : '||SQLERRM);
+END;            
+    
+EXECUTE PROC_TEST1;
+
+SELECT * FROM PROCTEST;   
+
+--1-2) 프로시저 PROC_TEST2을 생성.
+
+CREATE OR REPLACE PROCEDURE PROC_TEST2
+IS 
+    DEL_ERROR EXCEPTION;
+    V_SEQ NUMBER;
+BEGIN 
+    DELETE FROM PROCTEST
+     WHERE PROC_SEQ = (SELECT MAX(PROC_SEQ)
+                         FROM PROCTEST);
+    
+    --PL/SQL에서 SELECT가 사용되면 INTO도 무조건 사용되어야 함                     
+    SELECT COUNT(PROC_SEQ) INTO V_SEQ FROM PROCTEST;                          
+    
+    IF V_SEQ < 1 THEN
+        --시스템 오류가 아닌 개발자의 조건으로 예외를 발생함
+        RAISE DEL_ERROR;
+    END IF;    
+     
+    EXCEPTION
+       WHEN DEL_ERROR THEN
+           DBMS_OUTPUT.PUT_LINE('삭제할 데이터가 없습니다.'||SQLERRM);
+END;            
+
+EXECUTE PROC_TEST2;
+
+SELECT * FROM PROCTEST;
+
+--1-3) 회원ID를 매개변수로 하여 
+--해당 회원의 마일리지를 100점 추가하는
+--PROCEDURE를 생성하기(PROC_TEST3)
+
+CREATE OR REPLACE PROCEDURE PROC_TEST3
+             (V_ID MEMBER.MEM_ID%TYPE,
+              V_MILE MEMBER.MEM_MILEAGE%TYPE)
+IS
+    NOTFOUND_ERROR EXCEPTION;
+    V_TEMP NUMBER;
+BEGIN 
+    UPDATE MEMBER
+       SET MEM_MILEAGE = MEM_MILEAGE + V_MILE
+     WHERE MEM_ID = V_ID;
+     
+     SELECT COUNT(*) INTO V_TEMP
+       FROM MEMBER
+      WHERE MEM_ID = V_ID;                          
+    
+    IF V_TEMP < 1 THEN
+        RAISE NOTFOUND_ERROR;
+    END IF;  
+     
+     EXCEPTION
+       WHEN NOTFOUND_ERROR THEN
+           DBMS_OUTPUT.PUT_LINE('해당 회원정보가 없습니다.'||SQLERRM);
+END; 
+
+EXECUTE PROC_TEST3('a001',400);
+
+SELECT MEM_MILEAGE
+  FROM MEMBER
+ WHERE MEM_ID = 'a001';
+    
+--회원아이디를 입력받아 이름과 취미를 OUT매개변수로 처리
+
+CREATE OR REPLACE PROCEDURE USP_MEMBERID
+    (P_MEM_ID IN MEMBER.MEM_ID%TYPE,
+     P_MEM_NAME OUT MEMBER.MEM_NAME%TYPE,
+     P_MEM_LIKE OUT MEMBER.MEM_LIKE%TYPE)
+IS
+BEGIN 
+    SELECT MEM_NAME,
+           MEM_LIKE
+      INTO P_MEM_NAME,
+           P_MEM_LIKE
+      FROM MEMBER
+     WHERE MEM_ID = P_MEM_ID;
+END;
+
+VAR MEM_NAME VARCHAR2(20)
+VAR MEM_LIKE VARCHAR2(20)
+
+EXECUTE USP_MEMBERID('a001',:mem_name,:mem_like);
+PRINT MEM_NAME
+PRINT MEM_LIKE;
+     
+--상품 코드와 월일 입력하면 해당 월에 대한
+--해당 상품의 입고,
+--출고를 처리해 화면에 출력하시오.
+--(프로시저명: USP_PROD_INFO,
+--월 입력형식은 'YYYYMM'이라 가정,
+--입고 및 출고는 OUT 매개변수로 처리.)
+--컬럼구성 : PROD_ID, EXTRACT(MONTH FROM BUY_DATE),
+--          SUM(BUY_QTY), SUM(CART_QTY)
+-- ALIAS : 상품코드, 월, 입고수량합계, 출고수량합계
+
+CREATE OR REPLACE PROCEDURE USP_PROD_INFO
+    (V_ID IN PROD.PROD_ID%TYPE,
+     V_DATE IN VARCHAR2,
+     V_BSUM OUT NUMBER,
+     V_CSUM OUT NUMBER)
+IS
+BEGIN
+    SELECT SUM(A.BQTY),
+           SUM(B.CQTY)
+      INTO V_BSUM, V_CSUM       
+      FROM (SELECT BUY_QTY AS BQTY
+              FROM BUYPROD
+             WHERE TO_CHAR(BUY_DATE,'YYYYMM') LIKE V_DATE||'%'
+               AND BUY_PROD = V_ID ) A,
+           (SELECT CART_QTY AS CQTY
+              FROM CART
+             WHERE CART_NO LIKE V_DATE||'%'
+               AND CART_PROD = V_ID) B;
+END;
+    
+VAR PROD_IN NUMBER
+VAR PROD_OUT NUMBER
+EXECUTE USP_PROD_INFO('P202000001','200504',:PROD_IN,:PROD_OUT)
+PRINT PROD_IN
+PRINT PROD_OUT;
+    
+    
+    
+    
+    
+    
+    
+    
+    
